@@ -14,6 +14,19 @@
 
 #include "src/common.h"
 
+/** Number of nanoseconds in a microsecond */
+#define NSEC_PER_USEC (1000)
+/** Number of nanoseconds in a millisecond */
+#define NSEC_PER_MSEC (1000000)
+/** Number of nanoseconds in a second */
+#define NSEC_PER_SEC (1000000000)
+/** Number of microsecond in a millisecond */
+#define USEC_PER_MSEC (1000)
+/** Number of microsecond in a second */
+#define USEC_PER_SEC (1000000)
+/** Number of millisecond in a second */
+#define MSEC_PER_SEC (1000)
+
 typedef struct ts_t *pts;
 typedef const struct ts_t *pcts;
 typedef struct Timestamp_t *ppts;

@@ -21,7 +21,12 @@ typedef const struct thread_t *pcthread;
 typedef bool (*thread_f)(void *cookie);
 
 struct thread_t {
+    #ifdef HAVE_THREADS_H
     thrd_t _thread; /**> C thread */
+    #endif
+    #ifdef __CSPTP_PTHREADS
+    pthread_t _thread; /* POSIX pthread */
+    #endif
     thread_f _func;
     void *_cookie;
     atomic_bool _run;

@@ -106,10 +106,11 @@ sysFuncDec(int, bind, int, const sockaddr *, socklen_t) throw();
 sysFuncDec(int, setsockopt, int, int, int, const void *, socklen_t) throw();
 sysFuncDec(ssize_t, recv, int, void *, size_t, int);
 sysFuncDec(ssize_t, recvfrom, int, void *, size_t, int, sockaddr *, socklen_t *);
-sysFuncDec(ssize_t, sendto, int, const void *buf, size_t len, int flags, const sockaddr *, socklen_t);
+sysFuncDec(ssize_t, sendto, int, const void *, size_t, int, const sockaddr *, socklen_t);
 sysFuncDec(ssize_t, recvmsg, int, msghdr *, int);
 sysFuncDec(ssize_t, sendmsg, int, const msghdr *, int);
-sysFuncDec(int, poll, pollfd *fds, nfds_t nfds, int timeout);
+sysFuncDec(int, poll, pollfd *, nfds_t, int);
+sysFuncDec(int, __poll_chk, pollfd *, nfds_t, int, size_t);
 sysFuncDec(int, printf, const char *, ...);
 sysFuncDec(int, __printf_chk, int, const char *, ...);
 sysFuncDec(int, fprintf, FILE *, const char *, ...);
@@ -127,6 +128,7 @@ sysFuncDec(int, clock_gettime, clockid_t , timespec *) throw();
 sysFuncDec(int, clock_settime, clockid_t , const timespec *) throw();
 sysFuncDec(int, clock_adjtime, clockid_t, timex *) throw();
 sysFuncDec(int, thrd_sleep, const timespec*, timespec*);
+sysFuncDec(int, nanosleep, const timespec*, timespec*);
 sysFuncDec(int, ioctl, int, unsigned long, ...) throw();
 sysFuncDec(tm *, localtime, const time_t *) throw();
 sysFuncDec(int, getifaddrs, ifaddrs **) throw();
@@ -155,10 +157,11 @@ void initLibSys()
     sysFuncAgn(int, setsockopt, int, int, int, const void *, socklen_t);
     sysFuncAgn(ssize_t, recv, int, void *, size_t, int);
     sysFuncAgn(ssize_t, recvfrom, int, void *, size_t, int, sockaddr *, socklen_t *);
-    sysFuncAgn(ssize_t, sendto, int, const void *buf, size_t len, int flags, const sockaddr *, socklen_t);
+    sysFuncAgn(ssize_t, sendto, int, const void *, size_t, int, const sockaddr *, socklen_t);
     sysFuncAgn(ssize_t, recvmsg, int, msghdr *, int);
     sysFuncAgn(ssize_t, sendmsg, int, const msghdr *, int);
-    sysFuncAgn(int, poll, pollfd *fds, nfds_t nfds, int timeout);
+    sysFuncAgn(int, poll, pollfd *, nfds_t, int);
+    sysFuncAgn(int, __poll_chk, pollfd *, nfds_t, int, size_t);
     sysFuncAgn(int, printf, const char *, ...);
     sysFuncAgn(int, __printf_chk, int, const char *, ...);
     sysFuncAgn(int, fprintf, FILE *, const char *, ...);
@@ -176,6 +179,7 @@ void initLibSys()
     sysFuncAgn(int, clock_settime, clockid_t , const timespec *);
     sysFuncAgn(int, clock_adjtime, clockid_t, timex *);
     sysFuncAgn(int, thrd_sleep, const timespec*, timespec*);
+    sysFuncAgn(int, nanosleep, const timespec*, timespec*);
     sysFuncAgn(int, ioctl, int, unsigned long, ...);
     sysFuncAgn(tm *, localtime, const time_t *);
     sysFuncAgn(int, getifaddrs, ifaddrs **);
@@ -275,6 +279,14 @@ static inline char *l_realpath(const char *path, char *resolved)
         strcpy(resolved, path);
     return resolved;
 }
+static inline int l_poll(pollfd *fds, nfds_t nfds, int timeout)
+{
+    if(nfds == 1 && timeout == 17 && fds != nullptr && fds[0].fd == 7 && fds[0].events == POLLIN && fds[0].revents == 0) {
+        fds[0].revents = POLLIN;
+        return 1;
+    }
+    return retErr(EINVAL);
+}
 /*****************************************************************************/
 int socket(int domain, int type, int protocol) throw()
 {
@@ -372,11 +384,12 @@ ssize_t sendmsg(int fd, const msghdr *msg, int flags)
 int poll(pollfd *fds, nfds_t nfds, int timeout)
 {
     retTest(poll, fds, nfds, timeout);
-    if(nfds == 1 && timeout == 17 && fds != nullptr && fds[0].fd == 7 && fds[0].events == POLLIN && fds[0].revents == 0) {
-        fds[0].revents = POLLIN;
-        return 1;
-    }
-    return retErr(EINVAL);
+    return l_poll(fds, nfds, timeout);
+}
+int __poll_chk(pollfd *fds, nfds_t nfds, int timeout, size_t len)
+{
+    retTest(__poll_chk, fds, nfds, timeout, len);
+    return l_poll(fds, nfds, timeout);
 }
 int printf(const char *format, ...)
 {
@@ -507,9 +520,15 @@ int clock_adjtime(clockid_t clk_id, timex *tmx) throw()
     }
     return retErr(EINVAL);
 }
-int thrd_sleep(const timespec* duration, timespec* remaining)
+int thrd_sleep(const timespec *duration, timespec *remaining)
 {
     retTest(thrd_sleep, duration, remaining);
+    // Nothing during testing
+    return 0;
+}
+int nanosleep(const struct timespec *duration, struct timespec *remaining)
+{
+    retTest(nanosleep, duration, remaining);
     // Nothing during testing
     return 0;
 }

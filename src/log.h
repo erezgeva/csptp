@@ -14,7 +14,18 @@
 
 #include "src/common.h"
 
-#include <syslog.h> /* POSIX */
+#ifdef HAVE_SYSLOG_H
+#include <syslog.h>
+#else
+#define LOG_EMERG    (0)
+#define LOG_ALERT    (1)
+#define LOG_CRIT     (2)
+#define LOG_ERR      (3)
+#define LOG_WARNING  (4)
+#define LOG_NOTICE   (5)
+#define LOG_INFO     (6)
+#define LOG_DEBUG    (7)
+#endif /* HAVE_SYSLOG_H */
 
 struct log_options_t {
     int log_level; /**> Logging level */
@@ -37,6 +48,7 @@ static inline const char *_basename(const char *path)
 }
 
 /** Threads header errors */
+#ifdef HAVE_THREADS_H
 static inline const char *thread_error(int err)
 {
     switch(err) {
@@ -54,6 +66,7 @@ static inline const char *thread_error(int err)
             return "unkown";
     }
 }
+#endif /* HAVE_THREADS_H */
 
 /**
  * set logging setting

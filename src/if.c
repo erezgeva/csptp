@@ -13,14 +13,26 @@
 #include "src/log.h"
 
 #include <errno.h>
-#include <unistd.h>        /* POSIX */
-#include <netdb.h>         /* POSIX */
-#include <net/if.h>        /* POSIX */
-#include <ifaddrs.h>       /* GNU/Linux */
-#include <sys/ioctl.h>     /* GNU/Linux */
-#include <linux/sockios.h> /* Linux */
-#include <linux/ethtool.h> /* Linux */
-#include <linux/net_tstamp.h> /* Linux */
+#ifdef HAVE_IFADDRS_H
+#include <ifaddrs.h>
+#endif
+#ifdef HAVE_SYS_IOCTL_H
+#include <sys/ioctl.h>
+#endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+#ifdef HAVE_NET_IF_H
+#include <net/if.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef __linux__
+#include <linux/sockios.h>
+#include <linux/ethtool.h>
+#include <linux/net_tstamp.h>
+#endif /* __linux__ */
 
 static void _free(pif self)
 {
@@ -29,6 +41,7 @@ static void _free(pif self)
         free(self);
     }
 }
+#ifdef __linux__
 static inline void setClockID(pif self)
 {
     /* Follow IEEE EUI-48 to EUI-64 */
@@ -205,8 +218,13 @@ err:
     close(fd);
     return ret;
 }
+#else /* __linux__ */
+static bool _intIfName(pif self, const char *ifName, bool useTwoSteps) { return true; }
+static bool _intIfIndex(pif self, int ifIndex, bool useTwoSteps) { return true; }
+#endif /* __linux__ */
 static bool _getIPv6(pif self, uint8_t **ipv6)
 {
+    #ifdef HAVE_IFADDRS_H
     if(UNLIKELY_COND(self == NULL) || !self->_init || ipv6 == NULL)
         return false;
     if(!self->_haveIpv6) {
@@ -232,10 +250,12 @@ static bool _getIPv6(pif self, uint8_t **ipv6)
         self->_haveIpv6 = true;
     }
     *ipv6 = self->_ipv6;
+    #endif /* HAVE_IFADDRS_H */
     return true;
 }
 static bool _bind(pcif self, int fd)
 {
+    #ifdef HAVE_SYS_SOCKET_H
     if(UNLIKELY_COND(self == NULL) || !self->_init || fd < 0)
         return false;
     if(setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, self->_ifName,
@@ -243,6 +263,7 @@ static bool _bind(pcif self, int fd)
         logp_err("SO_BINDTODEVICE");
         return false;
     }
+    #endif /* HAVE_SYS_SOCKET_H */
     return true;
 }
 static bool _isInit(pcif self)

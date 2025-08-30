@@ -12,14 +12,27 @@
 #ifndef __CSPTP_COMMON_H_
 #define __CSPTP_COMMON_H_
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#ifdef HAVE_STDBOOL_H
+#include <stdbool.h>
+#endif
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#ifdef HAVE_THREADS_H
 #include <threads.h>
+#else
+#ifdef HAVE_PTHREAD_H
+#define __CSPTP_PTHREADS
+#include <pthread.h>
+#endif
+#endif /* HAVE_THREADS_H */
 
 #if 0
 References to C attributes:

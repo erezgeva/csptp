@@ -11,6 +11,8 @@
 .sw?
 .*.sw?
 /tags
+/tmp.c
+/config.h
 /csptp.a
 /csptp_client
 /csptp_service

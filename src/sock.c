@@ -13,31 +13,51 @@
 #include "src/log.h"
 #include "src/swap.h"
 
-#include <unistd.h>     /* POSIX */
-#include <poll.h>       /* POSIX */
-#include <netdb.h>      /* POSIX */
-#include <sys/types.h>  /* POSIX */
-#include <sys/socket.h> /* POSIX */
-#include <linux/net_tstamp.h> /* Linux */
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+#ifdef __linux__
+#include <linux/net_tstamp.h>
+#endif
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define poll(fds, nfds, timeout) WSAPoll(fds, nfds, timeout)
+#define close(fd) closesocket(fd)
+#define MSG_DONTWAIT (0)
+typedef int socklen_t;
+#endif /* _WIN32 */
 
 const uint16_t ptp_udp_port = 320;
 
 static inline bool enableTimestamp(int fd, int vclock)
 {
+    #ifdef __linux__
     struct so_timestamping timestamping;
     int flags = SOF_TIMESTAMPING_TX_HARDWARE |
         SOF_TIMESTAMPING_RX_HARDWARE |
         SOF_TIMESTAMPING_RAW_HARDWARE;
-    if(vclock  > 0)
+    if(vclock > 0)
         flags |= SOF_TIMESTAMPING_BIND_PHC;
     memset(&timestamping, 0, sizeof(timestamping));
     timestamping.flags = flags;
     timestamping.bind_phc = vclock;
     if(setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &timestamping,
-            sizeof(timestamping)) == 0)
-        return true;
-    logp_err("SO_TIMESTAMPING");
-    return false;
+            sizeof(timestamping)) < 0) {
+        logp_err("SO_TIMESTAMPING");
+        return false;
+    }
+    #endif /* __linux__ */
+    return true;
 }
 
 static void a_free(pipaddr self)
@@ -410,15 +430,7 @@ pipaddr addr_alloc(prot type)
         log_err("memory allocation failed");
     return ret;
 }
-
-static void _free(psock self)
-{
-    if(LIKELY_COND(self != NULL)) {
-        self->close(self);
-        free(self);
-    }
-}
-static bool _close(psock self)
+static bool s_close(psock self)
 {
     if(LIKELY_COND(self != NULL) && self->_fd >= 0) {
         int ret = close(self->_fd);
@@ -426,12 +438,17 @@ static bool _close(psock self)
         return (ret == 0);
     }
     return false;
-};
-static int _fileno(pcsock self)
+}
+static void s_free(psock self)
+{
+    s_close(self);
+    free(self);
+}
+static int s_fileno(pcsock self)
 {
     return UNLIKELY_COND(self == NULL) ? -1 : self->_fd;
 }
-static bool _init(psock self, prot type)
+static bool s_init(psock self, prot type)
 {
     int domain;
     if(UNLIKELY_COND(self == NULL))
@@ -464,7 +481,7 @@ static bool _init(psock self, prot type)
     self->_type = type;
     return true;
 }
-static bool _initSrv(psock self, pcipaddr address)
+static bool s_initSrv(psock self, pcipaddr address)
 {
     int fd;
     if(UNLIKELY_COND(self == NULL))
@@ -482,12 +499,12 @@ static bool _initSrv(psock self, pcipaddr address)
         logp_err("socket");
         return false;
     }
-    if(bind(fd, address->getAddr(address), address->getSize(address)) < 0) {
-        logp_err("bind");
+    if(!enableTimestamp(fd, 0)) {
         close(fd);
         return false;
     }
-    if(!enableTimestamp(fd, 0)) {
+    if(bind(fd, address->getAddr(address), address->getSize(address)) < 0) {
+        logp_err("bind");
         close(fd);
         return false;
     }
@@ -495,7 +512,7 @@ static bool _initSrv(psock self, pcipaddr address)
     self->_type = address->_type;
     return true;
 }
-static bool _send(pcsock self, pcbuffer buffer, pcipaddr address)
+static bool s_send(pcsock self, pcbuffer buffer, pcipaddr address)
 {
     size_t len;
     ssize_t ret;
@@ -514,7 +531,7 @@ static bool _send(pcsock self, pcbuffer buffer, pcipaddr address)
         return false;
     }
     len = buffer->getLen(buffer);
-    ret = sendto(self->_fd, buffer->getBuf(buffer), len, 0,
+    ret = sendto(self->_fd, (void *)buffer->getBuf(buffer), len, 0,
             address->getAddr(address), address->getSize(address));
     if(len == ret)
         return true;
@@ -524,7 +541,7 @@ static bool _send(pcsock self, pcbuffer buffer, pcipaddr address)
         log_warning("send partial data %zu from %zu", ret, len);
     return false;
 }
-static bool _poll(pcsock self, int timeout)
+static bool s_poll(pcsock self, int timeout)
 {
     int ret;
     struct pollfd fds;
@@ -544,11 +561,11 @@ static bool _poll(pcsock self, int timeout)
     }
     return ret > 0 && (fds.revents & POLLIN) > 0;
 }
-static bool _recv(pcsock self, pbuffer buffer, pipaddr address, pts ts)
+static bool s_recv(pcsock self, pbuffer buffer, pipaddr address, pts ts)
 {
+    ssize_t ret;
     size_t osize;
     socklen_t size;
-    ssize_t ret;
     if(UNLIKELY_COND(self == NULL))
         return false;
     if(self->_fd < 0) {
@@ -566,8 +583,8 @@ static bool _recv(pcsock self, pbuffer buffer, pipaddr address, pts ts)
     osize = address->getSize(address);
     size = osize;
     getUtcClock(ts); // TODO get RX ts from HW
-    ret = recvfrom(self->_fd, buffer->getBuf(buffer), buffer->getSize(buffer),
-            MSG_DONTWAIT, address->getAddr(address), &size);
+    ret = recvfrom(self->_fd, (void *)buffer->getBuf(buffer),
+            buffer->getSize(buffer), MSG_DONTWAIT, address->getAddr(address), &size);
     if(ret > 0 && osize == size) {
         buffer->setLen(buffer, ret);
         return true;
@@ -580,7 +597,7 @@ static bool _recv(pcsock self, pbuffer buffer, pipaddr address, pts ts)
         log_warning("recvfrom partial %d", ret);
     return false;
 }
-static prot _getType(pcsock self)
+static prot s_getType(pcsock self)
 {
     return UNLIKELY_COND(self == NULL) ? 0 : self->_type;
 }
@@ -591,7 +608,7 @@ psock sock_alloc()
     if(ret != NULL) {
         ret->_fd = -1;
         ret->_type = Invalid_PROTO;
-#define asg(a) ret->a = _##a
+#define asg(a) ret->a = s_##a
         asg(free);
         asg(close);
         asg(fileno);
@@ -644,7 +661,7 @@ bool addressStringToBinary(const char *str, prot *_type, uint8_t *addr)
     }
     if(UNLIKELY_COND(_type == NULL || addr == NULL))
         return false;
-    /* We  translate address before we try host name translation */
+    /* We translate address before we try host name translation */
     if(try_inet_pton(str, _type, addr))
         return true;
     switch(*_type) {

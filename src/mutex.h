@@ -17,7 +17,12 @@
 typedef struct mutex_t *pmutex;
 
 struct mutex_t {
+    #ifdef HAVE_THREADS_H
     mtx_t _mutex; /**> C mutex */
+    #endif
+    #ifdef __CSPTP_PTHREADS
+    pthread_mutex_t _mutex; /**> C mutex */
+    #endif
 
     /**
      * Free this mutex object

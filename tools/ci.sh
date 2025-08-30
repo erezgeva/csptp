@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: Copyright © 2025 Erez Geva <ErezGeva2@gmail.com>
 #
@@ -28,10 +28,12 @@ run_ci()
  set -e # Exit with error
  out "Build with GCC"
  make clean
+ tools/probe.sh
  make CFLAGS=-Werror utest
  make CFLAGS=-Werror
  out "Build with Clang"
  make clean
+ CC=clang tools/probe.sh
  make CFLAGS=-Werror CC=clang CXX=clang++ utest
  make CFLAGS=-Werror CC=clang CXX=clang++
 }

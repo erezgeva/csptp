@@ -31,6 +31,7 @@ bool setLog(const char *name, const struct log_options_t *opt)
     }
     log_level = level;
     useEcho = opt->useEcho;
+    #ifdef HAVE_SYSLOG_H
     /* Do we change system log usage? */
     if(useSysLog != opt->useSysLog) {
         if(useSysLog)
@@ -39,12 +40,15 @@ bool setLog(const char *name, const struct log_options_t *opt)
             openlog(name, LOG_PID, LOG_DAEMON);
         useSysLog = !useSysLog;
     }
+    #endif /* HAVE_SYSLOG_H */
     return true;
 }
 void doneLog()
 {
+    #ifdef HAVE_SYSLOG_H
     if(useSysLog)
         closelog();
+    #endif /* HAVE_SYSLOG_H */
 }
 void _log_msg(int level, bool useErrorno, const char *_file, int line,
     const char *func, const char *format, ...)
@@ -67,8 +71,10 @@ void _log_msg(int level, bool useErrorno, const char *_file, int line,
                 func, strMsg);
     if(ret <= 0)
         return;
+    #ifdef HAVE_SYSLOG_H
     if(useSysLog)
         syslog(level, "%s", totMsg);
+    #endif /* HAVE_SYSLOG_H */
     if(useEcho)
         fprintf(level > LOG_WARNING ? stdout : stderr, "%s\n", totMsg);
 }

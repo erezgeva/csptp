@@ -13,7 +13,9 @@
 #include "src/slist.h"
 
 #include <ctype.h>
-#include <getopt.h> /* GNU */
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#endif
 
 static inline bool isValid(int c)
 {

@@ -76,7 +76,7 @@ TEST(timestampTest, negative)
   useTestMode(true);
   EXPECT_FALSE(t->toTimestamp(t, &p));
   EXPECT_EQ(0, strncmp(getErr(), "[4:time.c:", 10));
-  EXPECT_STREQ(strrchr(getErr(), ':'), ":_toTimestamp] PTP Timestamp do not support negitive time\n");
+  EXPECT_STREQ(strrchr(getErr(), ':'), ":t_toTimestamp] PTP Timestamp do not support negitive time\n");
   t->free(t);
 }
 
@@ -243,4 +243,4 @@ TEST(timestampTest, tz)
   EXPECT_STREQ(z[0].name, "CET");
   EXPECT_EQ(z[1].offset, 2 * 3600);
   EXPECT_STREQ(z[1].name, "CEST");
-};
+}

@@ -14,7 +14,9 @@
 #include <strings.h>
 #include <math.h>
 #include <errno.h>
-#include <getopt.h> /* GNU */
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#endif
 
 static inline bool toInt64(const char *s, int64_t *i)
 {

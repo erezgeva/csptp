@@ -15,11 +15,12 @@
 #include "src/log.h"
 
 #include <limits.h>
-#ifdef _POSIX_SOURCE
-#include <unistd.h>   /* POSIX */
-#include <fcntl.h>    /* POSIX */
-#include <sys/stat.h> /* POSIX */
-#endif /*_POSIX_SOURCE*/
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
 
 #define CLOCK_INVALID (-1)
 #define NO_SUCH_PTP (-1)
@@ -38,15 +39,25 @@ static inline clockid_t fd_to_clockid(int fd)
 }
 static inline char *isCharFile(const char *file, char *b)
 {
+    #ifdef HAVE_SYS_STAT_H
     struct stat sb;
+    #endif
+    #ifdef HAVE_DECL_REALPATH
     char *a = realpath(file, b);
     if(a == NULL)
         return NULL; /* File does not exist */
+    #else
+    char *a = (char *)file;
+    #endif
+    #ifdef HAVE_SYS_STAT_H
     if(stat(file, &sb) != 0) {
         logp_err("stat");
         return NULL;
     }
     return (sb.st_mode & S_IFMT) == S_IFCHR ? a : NULL;
+    #else /* HAVE_SYS_STAT_H */
+    return NULL;
+    #endif
 }
 static inline bool init(pphc self, const char *dev, bool rd)
 {
@@ -80,7 +91,7 @@ static inline bool initDone(pphc self, const char *dev)
         self->_ptpIndex = d;
     return true;
 }
-static void _free(pphc self)
+static void p_free(pphc self)
 {
     if(LIKELY_COND(self != NULL)) {
         if(self->_fd >= 0)
@@ -89,7 +100,7 @@ static void _free(pphc self)
         free(self);
     }
 }
-static bool _initDev(pphc self, const char *dev, bool rd)
+static bool p_initDev(pphc self, const char *dev, bool rd)
 {
     char p[PATH_MAX], *a;
     if(UNLIKELY_COND(self == NULL) || dev == NULL)
@@ -109,7 +120,7 @@ static bool _initDev(pphc self, const char *dev, bool rd)
     }
     return false;
 }
-static bool _initIndex(pphc self, int idx, bool rd)
+static bool p_initIndex(pphc self, int idx, bool rd)
 {
     char p[PATH_MAX];
     if(UNLIKELY_COND(self == NULL) || idx < 0)
@@ -124,7 +135,7 @@ static bool _initIndex(pphc self, int idx, bool rd)
     }
     return false;
 }
-static bool _getTime(pcphc self, pts ts)
+static bool p_getTime(pcphc self, pts ts)
 {
     if(UNLIKELY_COND(self == NULL) || self->_fd < 0 || ts == NULL)
         return false;
@@ -134,7 +145,7 @@ static bool _getTime(pcphc self, pts ts)
     }
     return true;
 }
-static bool _setTime(pphc self, pcts ts)
+static bool p_setTime(pphc self, pcts ts)
 {
     if(UNLIKELY_COND(self == NULL) || self->_fd < 0 || ts == NULL)
         return false;
@@ -144,7 +155,8 @@ static bool _setTime(pphc self, pcts ts)
     }
     return true;
 }
-static bool _offsetClock(pphc self, pcts ts)
+#ifdef __linux__
+static bool p_offsetClock(pphc self, pcts ts)
 {
     struct timex tmx;
     if(UNLIKELY_COND(self == NULL) || self->_fd < 0 || ts == NULL)
@@ -160,7 +172,7 @@ static bool _offsetClock(pphc self, pcts ts)
     }
     return true;
 }
-static bool _setPhase(pphc self, pcts ts)
+static bool p_setPhase(pphc self, pcts ts)
 {
     struct timex tmx;
     if(UNLIKELY_COND(self == NULL) || self->_fd < 0 || ts == NULL)
@@ -175,7 +187,7 @@ static bool _setPhase(pphc self, pcts ts)
     }
     return true;
 }
-static bool _getFreq(pcphc self, double *f)
+static bool p_getFreq(pcphc self, double *f)
 {
     struct timex tmx;
     if(UNLIKELY_COND(self == NULL) || self->_fd < 0 || f == NULL)
@@ -188,7 +200,7 @@ static bool _getFreq(pcphc self, double *f)
     *f = (double)tmx.freq / PPB_TO_SCALE_PPM;
     return true;
 }
-static bool _setFreq(pphc self, double f)
+static bool p_setFreq(pphc self, double f)
 {
     struct timex tmx;
     if(UNLIKELY_COND(self == NULL) || self->_fd < 0)
@@ -202,19 +214,25 @@ static bool _setFreq(pphc self, double f)
     }
     return true;
 }
-static int _fileno(pcphc self)
+#else
+static bool p_offsetClock(pphc self, pcts ts) { return true; }
+static bool p_setPhase(pphc self, pcts ts) { return true; }
+static bool p_getFreq(pcphc self, double *f) { return true; }
+static bool p_setFreq(pphc self, double f) { return true; }
+#endif
+static int p_fileno(pcphc self)
 {
     return LIKELY_COND(self != NULL) ? self->_fd : -1;
 }
-static clockid_t _clkId(pcphc self)
+static clockid_t p_clkId(pcphc self)
 {
     return LIKELY_COND(self != NULL) ? self->_clkId : CLOCK_INVALID;
 }
-static int _ptpIndex(pcphc self)
+static int p_ptpIndex(pcphc self)
 {
     return LIKELY_COND(self != NULL) ? self->_ptpIndex : NO_SUCH_PTP;
 }
-static const char *_device(pcphc self)
+static const char *p_device(pcphc self)
 {
     return LIKELY_COND(self != NULL) ? self->_device : NULL;
 }
@@ -226,7 +244,7 @@ pphc phc_alloc()
         ret->_ptpIndex = NO_SUCH_PTP;
         ret->_clkId = CLOCK_INVALID;
         ret->_device = NULL;
-#define asg(a) ret->a = _##a
+#define asg(a) ret->a = p_##a
         asg(free);
         asg(initDev);
         asg(initIndex);

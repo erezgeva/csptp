@@ -12,27 +12,23 @@
 #ifndef __CSPTP_SWAP_H_
 #define __CSPTP_SWAP_H_
 
-#include <stdint.h>
-#include <arpa/inet.h> /* POSIX */
-
-#if defined __BYTE_ORDER__XX && defined __ORDER_BIG_ENDIAN__XX && __BYTE_ORDER__XX == __ORDER_BIG_ENDIAN__XX
-static inline uint64_t htonll(uint64_t value) { return value; }
-static inline uint64_t ntohll(uint64_t value) { return value; }
-#else
-static inline uint64_t htonll(uint64_t value)
-{
-    uint64_t ret;
-    uint32_t *p = (uint32_t *)&ret;
-    p[0] = htonl((uint32_t)(value >> 32));
-    p[1] = htonl((uint32_t)(value & UINT32_MAX));
-    return ret;
-}
-static inline uint64_t ntohll(uint64_t value)
-{
-    uint32_t *p = (uint32_t *)&value;
-    return ((uint64_t)ntohl(p[0]) << 32) | ntohl(p[1]);
-}
+#include "src/common.h"
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
+#ifdef HAVE_ENDIAN_H
+#include <endian.h>
+#endif
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
+#ifndef HAVE_DECL_HTONLL
+#ifdef HAVE_ENDIAN_H
+static inline uint64_t htonll(uint64_t value) {return htobe64(value);}
+static inline uint64_t ntohll(uint64_t value) {return be64toh(value);}
+#endif /* HAVE_ENDIAN_H */
+#endif /* HAVE_DECL_HTONLL */
 
 static inline uint16_t cpu_to_net16(uint16_t value) {return htons(value);}
 static inline uint32_t cpu_to_net32(uint32_t value) {return htonl(value);}

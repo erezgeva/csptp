@@ -13,7 +13,7 @@ OBJS:=$(SRCS:%.c=%.o)
 HDRS:=$(wildcard src/*.h)
 ALL:=csptp_service csptp_client
 TOBJS:=src/service.o src/client.o
-USE:=$(TOBJS) $(ALL)
+USE:=$(TOBJS) $(ALL) config.h
 MAIN_AR:=csptp.a
 LIBSYS_SO:=libsys/libsys.so
 LIBSYS_H:=libsys/libsys.h
@@ -22,17 +22,20 @@ D_FILES:=$(wildcard src/*.d utest/*.d)
 
 include version
 
-BFLAGS:= -I. -Wall -std=gnu11 -g -DVERSION=\"$(maj_ver).$(min_ver)\"
+BFLAGS:= -I. -Wall -std=gnu11 -g -DVERSION=\"$(maj_ver).$(min_ver)\" -include config.h
 override CFLAGS+= $(BFLAGS) -MT $@ -MMD -MP -MF $(basename $@).d
 
 all: $(ALL)
 
-$(MAIN_AR): $(OBJS)
+config.h:
+	tools/probe.sh
+
+$(MAIN_AR): $(OBJS) | config.h
 	$(RM) $@
 	$(AR) cr $@ $^
 	ranlib $@
 
-$(TOBJS):
+$(TOBJS): config.h
 	printf 'int main(int argc,char**argv){return %s(argc,argv);}' \
 	 "$(basename $(@F))_main" |\
 	$(CC) $(BFLAGS) -include src/main.h -c -x c - -o $@
@@ -64,7 +67,7 @@ $(LIBSYS_SO): libsys/libsys.cpp $(LIBSYS_H)
 	$(CXX) -shared -fPIC -include $(LIBSYS_H) -o $@ $< -ldl
 
 override CXXFLAGS+=-MT $@ -MMD -MP -MF $(basename $@).d
-override CXXFLAGS+=$(GFLAGS) -I.
+override CXXFLAGS+=$(GFLAGS) -include config.h -I.
 USRCS:=$(wildcard utest/*.cpp)
 UOBJS:=utest/main_.o $(USRCS:%.cpp=%.o)
 $(UTEST): $(UOBJS) $(MAIN_AR) $(LIBSYS_SO)

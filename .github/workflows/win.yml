@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: Copyright © 2025 Erez Geva <ErezGeva2@gmail.com>
+#
+# Check on windows
+#
+# @author Erez Geva <ErezGeva2@@gmail.com>
+# @copyright © 2025 Erez Geva
+#
+###############################################################################
+
+name: WIN
+
+on: [create, workflow_dispatch]
+
+# Permit read-only with GITHUB_TOKEN
+permissions: read-all
+
+jobs:
+  win: # https://github.com/actions/runner-images
+    runs-on: windows-2025
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v4
+    - name: MSYS2 PATH
+      shell: bash
+      run: echo 'C:\msys64\usr\bin' >> $GITHUB_PATH
+    - name: Install MSYS2 MingW-W64 UCRT GCC compiler
+      shell: cmd
+      run: |
+          rem 'MSYS2 uses MinGW-w64 https://packages.msys2.org/'
+          pacman -Syu --noconfirm --needed
+          if %ErrorLevel% NEQ 0 (exit 1)
+          pacman -Syu --noconfirm --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-binutils
+          if %ErrorLevel% NEQ 0 (exit 1)
+    - name: continuous integration
+      shell: bash
+      run: |
+          export PATH="/ucrt64/bin:$PATH"
+          tools/probe.sh
+          cat config.h
+          make csptp.a CFLAGS=-Werror

@@ -113,7 +113,7 @@ static void _free(pcfg self)
 static bool _parseLine(pcfg self, const char *line, size_t len)
 {
     if(LIKELY_COND(self != NULL) && line != NULL) {
-        if(UNLIKELY_COND(len == 0))
+        if(len == 0)
             len = strlen(line);
         /* strip leading spaces */
         while(*line != 0 && len > 0 && isspace(*line)) {
@@ -154,10 +154,14 @@ static bool _parseBuf(pcfg self, const char *buf)
 bool _parseFile(pcfg self, const char *name)
 {
     FILE *in;
+    bool ret = false;
+    #ifdef HAVE_DECL_GETLINE
     ssize_t r;
     size_t size;
-    bool ret = false;
     char *line = NULL;
+    #else
+    char line[2000];
+    #endif
     if(UNLIKELY_COND(self == NULL) || name == NULL)
         return false;
     in = fopen(name, "r");
@@ -165,13 +169,20 @@ bool _parseFile(pcfg self, const char *name)
         logp_err("Fail open %s", name);
         return false;
     }
+    #ifdef HAVE_DECL_GETLINE
     while((r = getline(&line, &size, in)) > 0) {
         if(!_parseLine(self, line, r))
+    #else
+    while(fgets(line, sizeof(line), in) != NULL) {
+        if(!_parseLine(self, line, 0))
+    #endif
             goto err;
     }
     ret = true;
 err:
+    #ifdef HAVE_DECL_GETLINE
     free(line);
+    #endif
     fclose(in);
     return ret;
 }

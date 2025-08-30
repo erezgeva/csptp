@@ -20,28 +20,11 @@ const int clock_realtime_id = CLOCK_REALTIME;
 /** Maximum value for unsigned integer 48 bits */
 static const uint64_t UINT48_MAX = UINT64_C(0xffffffffffff);
 
-#if 0
-/** Number of nanoseconds in a microsecond */
-static const int32_t NSEC_PER_USEC = 1000;
-#endif
-/** Number of nanoseconds in a millisecond */
-static const int32_t NSEC_PER_MSEC = 1000000;
-/** Number of nanoseconds in a second */
-static const int32_t NSEC_PER_SEC = 1000000000;
-#if 0
-/** Number of microsecond in a millisecond */
-static const int32_t USEC_PER_MSEC = 1000;
-/** Number of microsecond in a second */
-static const int32_t USEC_PER_SEC = 1000000;
-#endif
-/** Number of millisecond in a second */
-static const int32_t MSEC_PER_SEC = 1000;
-
-static void _free(pts self)
+static void t_free(pts self)
 {
     free(self);
 }
-static void _fromTimespec(pts self, pctsp ts)
+static void t_fromTimespec(pts self, pctsp ts)
 {
     if(ts == NULL)
         log_err("missing timespec");
@@ -51,7 +34,7 @@ static void _fromTimespec(pts self, pctsp ts)
         self->_ts.tv_nsec = ts->tv_nsec;
     }
 }
-static void _toTimespec(pcts self, ptsp ts)
+static void t_toTimespec(pcts self, ptsp ts)
 {
     if(ts == NULL)
         log_err("missing timespec");
@@ -60,7 +43,7 @@ static void _toTimespec(pcts self, ptsp ts)
         ts->tv_nsec = self->_ts.tv_nsec;
     }
 }
-static bool _fromTimestamp(pts self, pcpts ts)
+static bool t_fromTimestamp(pts self, pcpts ts)
 {
     if(ts == NULL)
         log_err("missing PTP Timestamp");
@@ -73,7 +56,7 @@ static bool _fromTimestamp(pts self, pcpts ts)
     }
     return false;
 }
-static bool _toTimestamp(pcts self, ppts ts)
+static bool t_toTimestamp(pcts self, ppts ts)
 {
     if(UNLIKELY_COND(self == NULL))
         return false;
@@ -94,7 +77,7 @@ static bool _toTimestamp(pcts self, ppts ts)
     }
     return false;
 }
-static void _setTs(pts self, int64_t ts)
+static void t_setTs(pts self, int64_t ts)
 {
     if(LIKELY_COND(self != NULL)) {
         lldiv_t d = lldiv(ts, NSEC_PER_SEC);
@@ -106,12 +89,12 @@ static void _setTs(pts self, int64_t ts)
         self->_ts.tv_nsec = d.rem;
     }
 }
-static int64_t _getTs(pcts self)
+static int64_t t_getTs(pcts self)
 {
     return UNLIKELY_COND(self == NULL) ? 0 :
         self->_ts.tv_sec * NSEC_PER_SEC + self->_ts.tv_nsec;
 }
-static void _assign(pts self, pcts other)
+static void t_assign(pts self, pcts other)
 {
     if(other == NULL)
         log_err("other timestap is missing");
@@ -121,7 +104,7 @@ static void _assign(pts self, pcts other)
         self->_ts.tv_nsec = other->_ts.tv_nsec;
     }
 }
-static bool _eq(pcts self, pcts other)
+static bool t_eq(pcts self, pcts other)
 {
     if(other == NULL)
         log_err("other timestap is missing");
@@ -130,7 +113,7 @@ static bool _eq(pcts self, pcts other)
             self->_ts.tv_nsec == other->_ts.tv_nsec;
     return false;
 }
-static bool _less(pcts self, pcts other)
+static bool t_less(pcts self, pcts other)
 {
     if(other == NULL)
         log_err("other timestap is missing");
@@ -140,7 +123,7 @@ static bool _less(pcts self, pcts other)
                 self->_ts.tv_nsec < other->_ts.tv_nsec);
     return false;
 }
-static bool _lessEq(pcts self, pcts other)
+static bool t_lessEq(pcts self, pcts other)
 {
     if(other == NULL)
         log_err("other timestap is missing");
@@ -150,9 +133,10 @@ static bool _lessEq(pcts self, pcts other)
                 self->_ts.tv_nsec <= other->_ts.tv_nsec);
     return false;
 }
-static void _sleep(pcts self)
+static void t_sleep(pcts self)
 {
     if(LIKELY_COND(self != NULL) && self->_ts.tv_sec > 0) {
+        #ifdef HAVE_THREADS_H
         switch(thrd_sleep(&self->_ts, NULL)) {
             case 0:
                 break;
@@ -163,9 +147,14 @@ static void _sleep(pcts self)
                 logp_err("thrd_sleep");
                 break;
         }
+        #endif
+        #ifdef __CSPTP_PTHREADS
+        if(nanosleep(&self->_ts, NULL) != 0)
+            logp_err("nanosleep");
+        #endif
     }
 }
-static void _addMilliseconds(pts self, int milliseconds)
+static void t_addMilliseconds(pts self, int milliseconds)
 {
     if(LIKELY_COND(self != NULL)) {
         lldiv_t d = lldiv(milliseconds, MSEC_PER_SEC);
@@ -186,7 +175,7 @@ pts ts_alloc()
     if(ret != NULL) {
         ret->_ts.tv_sec = 0;
         ret->_ts.tv_nsec = 0;
-#define asg(a) ret->a = _##a
+#define asg(a) ret->a = t_##a
         asg(free);
         asg(fromTimespec);
         asg(toTimespec);
@@ -256,8 +245,9 @@ bool cpu_to_net_ts(ppts ts)
 }
 struct time_zone_t *getLocalTZ()
 {
-    static bool first = true;
     static struct time_zone_t lTz[2];
+    #ifdef HAVE_TM_GMTOFF
+    static bool first = true;
     if(first) {
         memset(lTz, 0, sizeof(lTz));
         int i;
@@ -282,5 +272,6 @@ struct time_zone_t *getLocalTZ()
         strncpy(lTz[i].name, l-> tm_zone, MAX_TZ_LEN);
         first = false;
     }
+    #endif /* HAVE_TM_GMTOFF */
     return lTz;
 }

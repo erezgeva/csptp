@@ -12,7 +12,9 @@
 #include "src/cmdl.h"
 #include "src/cfg.h"
 
-#include <getopt.h> /* GNU */
+#ifdef HAVE_GETOPT_H
+#include <getopt.h>
+#endif
 
 static const struct opt_rec_t base_options[] = {
     KEY_BOOL("skip_syslog", 'y', "skip logging to syslog", false),

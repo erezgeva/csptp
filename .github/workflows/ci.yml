@@ -24,3 +24,13 @@ jobs:
       uses: actions/checkout@v4
     - name: continuous integration
       run: tools/ci.sh
+  mac:
+    runs-on: macos-latest
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v4
+    - name: continuous integration
+      run: |
+          tools/probe.sh
+          cat config.h
+          make CFLAGS=-Werror
