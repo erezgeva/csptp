@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: Copyright © 2025 Erez Geva <ErezGeva2@gmail.com>
+#
+# Continuous integration
+#
+# @author Erez Geva <ErezGeva2@@gmail.com>
+# @copyright © 2025 Erez Geva
+#
+###############################################################################
+
+name: CI
+
+# On evry push and Pull Request (PR)
+on: [push, pull_request, workflow_dispatch]
+
+# Permit read-only with GITHUB_TOKEN
+permissions: read-all
+
+jobs:
+  ci: # https://github.com/actions/runner-images
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v4
+    - name: continuous integration
+      run: tools/ci.sh
