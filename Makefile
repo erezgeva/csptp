@@ -11,6 +11,9 @@
 SRCS:=$(wildcard src/*.c)
 OBJS:=$(SRCS:%.c=%.o)
 HDRS:=$(wildcard src/*.h)
+ALL:=csptp_service csptp_client
+TOBJS:=src/service.o src/client.o
+USE:=$(TOBJS) $(ALL)
 MAIN_AR:=csptp.a
 LIBSYS_SO:=libsys/libsys.so
 LIBSYS_H:=libsys/libsys.h
@@ -19,13 +22,25 @@ D_FILES:=$(wildcard src/*.d utest/*.d)
 
 include version
 
-CFLAGS+=-MT $@ -MMD -MP -MF $(basename $@).d
-CFLAGS+=-I. -Wall -std=gnu11 -g -DVERSION=\"$(maj_ver).$(min_ver)\"
+BFLAGS:= -I. -Wall -std=gnu11 -g -DVERSION=\"$(maj_ver).$(min_ver)\"
+override CFLAGS+= $(BFLAGS) -MT $@ -MMD -MP -MF $(basename $@).d
+
+all: $(ALL)
 
 $(MAIN_AR): $(OBJS)
 	$(RM) $@
 	$(AR) cr $@ $^
 	ranlib $@
+
+$(TOBJS):
+	printf 'int main(int argc,char**argv){return %s(argc,argv);}' \
+	 "$(basename $(@F))_main" |\
+	$(CC) $(BFLAGS) -include src/main.h -c -x c - -o $@
+
+csptp_service: src/service.o $(MAIN_AR)
+	$(CC) -g $^ -o $@
+csptp_client: src/client.o $(MAIN_AR)
+	$(CC) -g $^ -o $@
 
 format: $(SRCS) $(HDRS)
 	astyle --project=none --options=astyle.opt $^
@@ -63,7 +78,7 @@ $1:
 endef
 
 USE_PHONY:=format tags clean utest
-USE:=$(USE_PHONY) $(MAIN_AR) $(UTEST) $(LIBSYS_SO) $(UOBJS) $(OBJS)
+USE+=$(USE_PHONY) $(MAIN_AR) $(UTEST) $(LIBSYS_SO) $(UOBJS) $(OBJS)
 NONPHONY_TGT:=$(firstword $(filter-out $(USE),$(MAKECMDGOALS)))
 ifneq ($(NONPHONY_TGT),)
 $(eval $(call phony,$(NONPHONY_TGT)))
