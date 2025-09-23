@@ -53,6 +53,9 @@ static inline void setClockID(pif self)
 static inline bool setHWTS(pif self, int fd, struct ifreq *ifr,
     bool useTwoSteps)
 {
+    #ifdef __CSPTP_SYSCLOCKTS
+    return true;
+    #endif
     bool have = true;
     struct hwtstamp_config cfg;
     memset(&cfg, 0, sizeof(cfg));
@@ -84,10 +87,8 @@ static inline bool setHWTS(pif self, int fd, struct ifreq *ifr,
         case HWTSTAMP_FILTER_ALL:
         case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
         case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
-        case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
         case HWTSTAMP_FILTER_PTP_V2_EVENT:
         case HWTSTAMP_FILTER_PTP_V2_SYNC:
-        case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
             break;
         default:
             cfg.rx_filter = HWTSTAMP_FILTER_PTP_V2_L4_SYNC;

@@ -28,9 +28,8 @@ static inline void printArr(uint8_t *t, size_t st, size_t sz)
       printf("%d, ", t[i]);
   puts("");
 }
-static void utestClockInfo(struct service_opt *opt, struct ifClk_t *clk)
+static void utestClockInfo(struct ifClk_t *clk)
 {
-  clk->ifName = opt->ifName;
   memcpy(clk->clockIdentity, "\x1\x2\x3\xfe\xff\x4\x5\x6", 8);
   memcpy(clk->organizationId, "\x1\x2\x3", 3);
   memcpy(clk->organizationSubType, "\x4\x5\x6", 3);
@@ -51,17 +50,21 @@ static void utestClockInfo(struct service_opt *opt, struct ifClk_t *clk)
 }
 
 // Test service create socket object
-// psock service_main_create_socket(pcipaddr address)
+// psock service_main_create_socket(pcipaddr address, pif interface)
 TEST(mainServiceTest, createSocket)
 {
   pipaddr a = addr_alloc(UDP_IPv4);
   ASSERT_NE(a, nullptr);
   EXPECT_TRUE(a->setIP4Str(a, "1.2.5.1"));
+  pif i = if_alloc();
+  ASSERT_NE(i, nullptr);
   useTestMode(true);
-  psock s = service_main_create_socket(a);
+  EXPECT_TRUE(i->intIfIndex(i, 2, false));
+  psock s = service_main_create_socket(a, i);
   ASSERT_NE(s, nullptr);
   s->free(s);
   useTestMode(false);
+  i->free(i);
   a->free(a);
 }
 
@@ -114,16 +117,15 @@ static bool recv_ReqSync(pcsock s, pbuffer b, pipaddr a, pts t)
 TEST(mainServiceTest, mainFlow)
 {
   struct service_state_t st;
-  struct ifClk_t clockInfo;
   pmsg m = msg_alloc();
   ASSERT_NE(m, nullptr);
   st.message = m;
   pbuffer b = buffer_alloc(160);
   ASSERT_NE(b, nullptr);
   st.buffer = b;
-  clockInfo.TZName = "CEST";
-  clockInfo.addressField = (uint8_t*)"\x3\x2\x1";
-  clockInfo.networkProtocol = UDP_IPv4;
+  struct ifClk_t clockInfo;
+  clockInfo.ifName = "eth0";
+  utestClockInfo(&clockInfo);
   st.clockInfo = &clockInfo;
   pipaddr a = addr_alloc(UDP_IPv4);
   ASSERT_NE(a, nullptr);
@@ -134,8 +136,11 @@ TEST(mainServiceTest, mainFlow)
   pts t2 = ts_alloc();
   ASSERT_NE(t2, nullptr);
   st.t2 = t2;
+  pif i = if_alloc();
+  ASSERT_NE(i, nullptr);
   useTestMode(true);
-  psock s = service_main_create_socket(a);
+  EXPECT_TRUE(i->intIfIndex(i, 2, false));
+  psock s = service_main_create_socket(a, i);
   ASSERT_NE(s, nullptr);
   st.socket = s;
   s->poll = dummy_poll; // dummy MOCK socket poll function!
@@ -149,6 +154,7 @@ TEST(mainServiceTest, mainFlow)
   EXPECT_EQ(t2->getTs(t2), 3000000000); // t2 value
   s->free(s);
   useTestMode(false);
+  i->free(i);
   t2->free(t2);
   t->free(t);
   a->free(a);
@@ -166,6 +172,7 @@ TEST(mainServiceTest, createObjs)
   opt.useRxTwoSteps = true;
   opt.useRxTwoSteps = true;
   opt.type = UDP_IPv4;
+  opt.ifName = "enp0s25";
   useTestMode(true);
   EXPECT_TRUE(service_main_allocObjs(&opt, &st));
   service_main_clean(&st);
@@ -218,16 +225,21 @@ TEST(mainServiceTest, sendRespSync)
   struct service_opt opt;
   opt.ifName = "eth0";
   struct ifClk_t clockInfo;
-  utestClockInfo(&opt, &clockInfo);
+  clockInfo.ifName = opt.ifName;
+  utestClockInfo(&clockInfo);
   st.clockInfo = &clockInfo;
+  pif i = if_alloc();
+  ASSERT_NE(i, nullptr);
   useTestMode(true);
-  psock s = service_main_create_socket(a);
+  EXPECT_TRUE(i->intIfIndex(i, 2, false));
+  psock s = service_main_create_socket(a, i);
   ASSERT_NE(s, nullptr);
   st.socket = s;
   s->send = sendRespSync; // MOCK socket send function!
   EXPECT_TRUE(service_main_sendRespSync(&st, 160, Flags0_Req_StatusTlv | Flags0_Req_AlternateTimeTlv));
   s->free(s);
   useTestMode(false);
+  i->free(i);
   rx->free(rx);
   t->free(t);
   b->free(b);
@@ -265,17 +277,25 @@ TEST(mainServiceTest, sendFollowUp)
   st.buffer = b;
   pts t = ts_alloc();
   ASSERT_NE(t, nullptr);
-  st.t2 = t;
+  st.rxTs = t;
+  pts t2 = ts_alloc();
+  ASSERT_NE(t, nullptr);
+  st.t2 = t2;
   memset(&st.params, 0, sizeof(struct ptp_params_t));
   st.params.sequenceId = 71;
+  pif i = if_alloc();
+  ASSERT_NE(i, nullptr);
   useTestMode(true);
-  psock s = service_main_create_socket(a);
+  EXPECT_TRUE(i->intIfIndex(i, 2, false));
+  psock s = service_main_create_socket(a, i);
   ASSERT_NE(s, nullptr);
   st.socket = s;
   s->send = respFollowUp; // MOCK socket send function!
   EXPECT_TRUE(service_main_sendFollowUp(&st, 160));
   s->free(s);
   useTestMode(false);
+  i->free(i);
+  t2->free(t2);
   t->free(t);
   b->free(b);
   a->free(a);

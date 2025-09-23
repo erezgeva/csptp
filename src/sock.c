@@ -37,10 +37,13 @@
 typedef int socklen_t;
 #endif /* _WIN32 */
 
-const uint16_t ptp_udp_port = 320;
+const uint16_t ptp_udp_port = 319;
 
 static inline bool enableTimestamp(int fd, int vclock)
 {
+    #ifdef __CSPTP_SYSCLOCKTS
+    return true;
+    #endif
     #ifdef __linux__
     struct so_timestamping timestamping;
     int flags = SOF_TIMESTAMPING_TX_HARDWARE |
@@ -481,7 +484,7 @@ static bool s_init(psock self, prot type)
     self->_type = type;
     return true;
 }
-static bool s_initSrv(psock self, pcipaddr address)
+static bool s_initSrv(psock self, pcipaddr address, pif ifObj)
 {
     int fd;
     if(UNLIKELY_COND(self == NULL))
@@ -499,6 +502,14 @@ static bool s_initSrv(psock self, pcipaddr address)
         logp_err("socket");
         return false;
     }
+    if(ifObj != NULL) {
+        if(!ifObj->bind(ifObj, fd)) {
+            close(fd);
+            log_err("binding to interface failed");
+            return false;
+        }
+    } else
+        log_debug("No interface to bind to");
     if(!enableTimestamp(fd, 0)) {
         close(fd);
         return false;
@@ -566,6 +577,9 @@ static bool s_recv(pcsock self, pbuffer buffer, pipaddr address, pts ts)
     ssize_t ret;
     size_t osize;
     socklen_t size;
+    struct msghdr m;
+    uint8_t cbuf[256];
+    struct iovec miov;
     if(UNLIKELY_COND(self == NULL))
         return false;
     if(self->_fd < 0) {
@@ -582,11 +596,39 @@ static bool s_recv(pcsock self, pbuffer buffer, pipaddr address, pts ts)
     }
     osize = address->getSize(address);
     size = osize;
-    getUtcClock(ts); // TODO get RX ts from HW
-    ret = recvfrom(self->_fd, (void *)buffer->getBuf(buffer),
-            buffer->getSize(buffer), MSG_DONTWAIT, address->getAddr(address), &size);
-    if(ret > 0 && osize == size) {
+    memset(&m, 0, sizeof(m));
+    memset(cbuf, 0, sizeof(cbuf));
+    miov.iov_base = buffer->getBuf(buffer);
+    miov.iov_len = buffer->getSize(buffer);
+    m.msg_name = address->getAddr(address);
+    m.msg_namelen = osize;
+    m.msg_iov = &miov;
+    m.msg_iovlen = 1;
+    m.msg_control = cbuf;
+    m.msg_controllen = sizeof(cbuf);
+    ret = recvmsg(self->_fd, &m, MSG_DONTWAIT);
+    if(ret > 0 && osize == m.msg_namelen) {
+        struct timespec *t = NULL;
         buffer->setLen(buffer, ret);
+        for(struct cmsghdr *c = CMSG_FIRSTHDR(&m); c != NULL; c = CMSG_NXTHDR(&m, c)) {
+            if(c->cmsg_level == SOL_SOCKET && c->cmsg_type == SO_TIMESTAMPING) {
+                if(c->cmsg_len < sizeof(struct timespec) * 3) {
+                    log_err("SO_TIMESTAMPING to small");
+                    return false;
+                }
+                t = (struct timespec *)CMSG_DATA(c);
+                ts->fromTimespec(ts, t + 2);
+                //printf("sock::recv %lld\n", ts->getTs(ts));  TODO: debug code
+            }
+        }
+        if(t == NULL) {
+            ts->setTs(ts, 0);
+            //log_warning("SO_TIMESTAMPING is missing"); TODO: debug code
+        }
+        // TODO We do get HW clock, but we do not set it!
+        #ifdef __CSPTP_SYSCLOCKTS
+        getUtcClock(ts);
+        #endif
         return true;
     }
     if(ret < 0)

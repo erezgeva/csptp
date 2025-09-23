@@ -37,11 +37,11 @@ void dummyClockInfo(struct service_opt *opt, struct ifClk_t *clk)
     clk->timeOfNextJump = 175863;
     clk->TZName = "CEST";
 }
-psock service_main_create_socket(pcipaddr addr)
+psock service_main_create_socket(pcipaddr addr, pif ifObj)
 {
     psock ret = sock_alloc();
     if(ret != NULL) {
-        if(!ret->initSrv(ret, addr)) {
+        if(!ret->initSrv(ret, addr, ifObj)) {
             ret->free(ret);
             return NULL;
         }
@@ -102,8 +102,10 @@ static inline bool addAltTimeTlv(pmsg msg, struct ifClk_t *clk)
     a->keyField = clk->keyField;
     a->currentOffset = clk->currentOffset;
     a->jumpSeconds = clk->jumpSeconds;
-    if(!set_uint48(&a->timeOfNextJump, clk->timeOfNextJump))
+    if(!set_uint48(&a->timeOfNextJump, clk->timeOfNextJump)) {
+        log_err("Fail to set timeOfNextJump");
         return false;
+    }
     if(clk->TZName == NULL || *clk->TZName == 0)
         a->displayName.lengthField = 0;
     else {
@@ -213,8 +215,9 @@ static bool inline main_flow(struct service_state_t *st, bool useTxTwoSteps)
                 log_warning("parse");
         } else
             log_warning("recv");
-    } else
+    } /* else TODO: code to restore
         log_debug("idle");
+    */
     return false;
 }
 bool service_main_flow(struct service_state_t *st, bool useTxTwoSteps)
@@ -239,8 +242,17 @@ bool service_main_allocObjs(struct service_opt *opt, struct service_state_t *st)
         log_err("Receiving two steps with sending one step mode is not supported");
         return false;
     }
+    if(opt->ifName == NULL || *opt->ifName == 0) {
+        log_err("Network interface is missing");
+        return false;
+    }
+    ALLOC(interface, if_alloc());
+    if(!st->interface->intIfName(st->interface, opt->ifName, opt->useRxTwoSteps)) {
+        log_err("Fail to initialize the Network interface object");
+        return false;
+    }
     ALLOC(address, addr_alloc(opt->type));
-    ALLOC(socket, service_main_create_socket(st->address));
+    ALLOC(socket, service_main_create_socket(st->address, st->interface));
     ALLOC(message, msg_alloc());
     ALLOC(rxTs, ts_alloc());
     ALLOC(t2, ts_alloc());
@@ -258,6 +270,7 @@ bool service_main_allocObjs(struct service_opt *opt, struct service_state_t *st)
 }
 void service_main_clean(struct service_state_t *st)
 {
+    FREE(interface);
     FREE(address);
     FREE(socket);
     FREE(message);

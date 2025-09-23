@@ -173,9 +173,9 @@ TEST(sockTest, convert)
 // psock sock_alloc()
 TEST(sockTest, client)
 {
-  useTestMode(true);
   psock s = sock_alloc();
   ASSERT_NE(s, nullptr);
+  useTestMode(true);
   EXPECT_TRUE(s->init(s, UDP_IPv4));
   EXPECT_EQ(s->fileno(s), 7);
   EXPECT_EQ(s->getType(s), UDP_IPv4);
@@ -204,20 +204,24 @@ TEST(sockTest, client)
 }
 
 // Tests socket object for service
-// bool initSrv(psock self, pcipaddr address)
+// bool initSrv(psock self, pcipaddr address, pif interface)
 TEST(sockTest, service)
 {
+  pif i = if_alloc();
+  ASSERT_NE(i, nullptr);
   useTestMode(true);
   psock s = sock_alloc();
   ASSERT_NE(s, nullptr);
+  EXPECT_TRUE(i->intIfIndex(i, 2, false));
   pipaddr a = addr_alloc(UDP_IPv4);
   ASSERT_NE(a, nullptr);
   EXPECT_TRUE(a->setIP4Str(a, "1.2.5.1"));
-  EXPECT_TRUE(s->initSrv(s, a));
+  EXPECT_TRUE(s->initSrv(s, a, i));
   EXPECT_EQ(s->fileno(s), 7);
   EXPECT_EQ(s->getType(s), UDP_IPv4);
   EXPECT_TRUE(s->close(s));
   a->free(a);
   s->free(s);
   useTestMode(false);
+  i->free(i);
 }

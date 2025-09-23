@@ -14,10 +14,12 @@
 
 #include "src/sock.h"
 #include "src/cmdl.h"
+#include "src/if.h"
 
 struct service_state_t {
     struct ifClk_t *clockInfo;
     struct ptp_params_t params;
+    pif interface; /** Network interface we use */
     pipaddr address; /** Last recieve Sync address */
     psock socket; /** Service address */
     pmsg message;
@@ -72,9 +74,10 @@ int service_main(int argc, char *argv[]);
 /**
  * service main create socket object for client
  * @param[in] address of the service
+ * @param[in] interface Network interface to bind socket to
  * @return new socket or null
  */
-psock service_main_create_socket(pcipaddr address);
+psock service_main_create_socket(pcipaddr address, pif interface);
 
 /**
  * service main send Response Sync message

@@ -14,6 +14,7 @@
 
 #include "src/buf.h"
 #include "src/time.h"
+#include "src/if.h"
 
 struct sockaddr;
 
@@ -239,9 +240,10 @@ struct sock_t {
      * Allocate the socket and initialize it with current parameters
      * @param[in, out] self socket object
      * @param[in] address socket object
+     * @param[in] interface Network interface to bind socket to
      * @return true if socket creation success
      */
-    bool (*initSrv)(psock self, pcipaddr address);
+    bool (*initSrv)(psock self, pcipaddr address, pif interface);
 
     /**
      * Send message
